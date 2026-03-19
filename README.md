@@ -1,140 +1,185 @@
-# logging
+# LouisLog
 
-一个基于C++11的轻量级日志库，采用单例模式设计，支持多种日志级别和日志文件滚动。
+一个轻量级、高性能的C++日志库，提供了灵活的日志配置和输出选项。
 
-## 核心功能
+## 特性
 
-- ✅ **日志级别**：支持DEBUG、INFO、WARN、ERROR、FATAL五个级别
-- ✅ **单例设计**：全局唯一日志实例，方便使用
-- ✅ **文件滚动**：支持按文件大小自动滚动日志文件
-- ✅ **格式化输出**：包含时间、日志级别、文件名、行号等信息
-- ✅ **宏定义简化**：提供debug/info/warn/error/fatal宏，使用更方便
-- ✅ **异常处理**：文件操作异常处理
+- **单例模式**：全局唯一的日志实例，方便在整个应用中使用
+- **多日志级别**：支持 TRACE、DEBUG、INFO、WARN、ERROR、FATAL 六个级别的日志
+- **多输出目标**：支持输出到控制台、文件或同时输出到两者
+- **日志文件翻滚**：基于文件大小的自动翻滚功能
+- **多线程安全**：支持多线程并发写入日志
+- **便捷的宏定义**：提供了简单易用的日志宏，支持可变参数格式化
+- **详细的日志信息**：每条日志包含时间戳、线程ID、日志级别、文件名、行号等信息
 
-## 目录结构
+## 安装
 
+### 依赖
+
+- C++11 或更高版本
+- CMake 3.10 或更高版本
+- Google Test (仅用于测试)
+
+### 构建
+
+```bash
+# 克隆仓库
+git clone <repository-url>
+cd logging
+
+# 创建构建目录
+mkdir build && cd build
+
+# 配置并构建
+cmake ..
+cmake --build .
+
+# 运行测试
+ctest
 ```
-logging/
-├── include/                 # 头文件目录
-│   ├── logging/            # 日志库核心头文件
-│   │   ├── logger.h        # 日志类定义
-│   │   └── logging.h       # 日志宏定义
-│   └── patterns/           # 设计模式实现
-│       └── singleton.h     # 单例模式模板
-├── src/                    # 源文件目录
-│   └── logger.cpp          # 日志类实现
-├── test/                   # 测试目录
-├── build/                  # 构建输出目录
-└── CMakeLists.txt          # CMake构建文件
-```
 
-## 快速开始
-
-### 构建步骤
-
-1. **创建构建目录**
-   ```bash
-   mkdir -p build
-   cd build
-   ```
-
-2. **运行CMake**
-   ```bash
-   cmake ..
-   ```
-
-3. **编译项目**
-   ```bash
-   make
-   ```
+## 使用示例
 
 ### 基本使用
 
 ```cpp
-#include "logging/logging.h"
+#include "LouisLog.h"
+
+using namespace louis::log;
 
 int main() {
-    // 打开日志文件
-    louis::logging::Logger::getInstance().open("test.log");
+    // 初始化日志（默认配置：INFO级别，输出到控制台）
+    LouisLog::getInstance().init();
     
-    // 设置日志级别为INFO（仅输出INFO及以上级别日志）
-    louis::logging::Logger::getInstance().setLevel(louis::logging::Level::INFO);
+    // 使用日志宏输出不同级别的日志
+    TRACE("这是一条TRACE级别的日志");
+    DEBUG("这是一条DEBUG级别的日志");
+    INFO("这是一条INFO级别的日志");
+    WARN("这是一条WARN级别的日志");
+    ERROR("这是一条ERROR级别的日志");
+    FATAL("这是一条FATAL级别的日志");
     
-    // 设置日志文件最大大小为1MB
-    louis::logging::Logger::getInstance().setMaxLen(1024 * 1024);
-    
-    // 使用日志宏记录日志
-    debug("This is a debug message");  // 不会输出，因为日志级别设置为INFO
-    info("This is an info message");    // 会输出
-    warn("This is a warning message");  // 会输出
-    error("This is an error message");  // 会输出
-    fatal("This is a fatal message");  // 会输出
-    
-    // 关闭日志文件
-    louis::logging::Logger::getInstance().close();
+    // 使用带格式化参数的日志宏
+    INFO_F("Hello, %s! The answer is %d.", "world", 42);
     
     return 0;
 }
 ```
 
-## API文档
-
-### 日志级别枚举
+### 高级配置
 
 ```cpp
-enum class Level {
-    DEBUG = 0,  // 调试信息
-    INFO,       // 普通信息
-    WARN,       // 警告信息
-    ERROR,      // 错误信息
-    FATAL,      // 致命错误
-    LEVEL_COUNT // 级别数量（用于内部计算）
-};
+#include "LouisLog.h"
+
+using namespace louis::log;
+
+int main() {
+    // 自定义配置：DEBUG级别，同时输出到控制台和文件，文件大小限制为1MB
+    LouisLog::getInstance().init(
+        LogLevel::DEBUG,      // 日志级别
+        LogTarget::BOTH,      // 输出目标
+        "app.log",            // 日志文件名
+        1024 * 1024           // 日志文件最大大小（字节）
+    );
+    
+    // 动态修改配置
+    LouisLog::getInstance().setLevel(LogLevel::INFO);
+    LouisLog::getInstance().setTarget(LogTarget::FILE);
+    LouisLog::getInstance().setLogFile("new_app.log");
+    LouisLog::getInstance().setMaxSize(2 * 1024 * 1024);
+    
+    // 输出日志
+    INFO("配置已更新");
+    
+    return 0;
+}
 ```
 
-### 核心方法
+## API 参考
 
-#### open(const std::string &fileName)
-- **功能**：打开日志文件
-- **参数**：
-  - `fileName`：日志文件路径
-- **异常**：文件打开失败时抛出`std::logic_error`
+### 核心类
 
-#### close()
-- **功能**：关闭日志文件
+#### LouisLog
 
-#### setLevel(Level level)
-- **功能**：设置日志级别，低于该级别的日志将被忽略
-- **参数**：
-  - `level`：日志级别枚举值
+- **static LouisLog& getInstance()**：获取日志单例实例
+- **void init(LogLevel level = LogLevel::INFO, LogTarget target = LogTarget::CONSOLE, std::string logFile = "app.log", size_t maxFileSize = 1024 * 1024)**：初始化日志
+- **void log(LogLevel level, const std::string& file, int line, const std::string& msg)**：写入日志
+- **void setLevel(LogLevel level)**：设置日志级别
+- **void setTarget(LogTarget target)**：设置输出目标
+- **void setLogFile(const std::string& logFile)**：设置日志文件
+- **void setMaxSize(size_t maxSize)**：设置日志文件最大大小
 
-#### setMaxLen(int len)
-- **功能**：设置日志文件最大长度，超过该长度将自动滚动
-- **参数**：
-  - `len`：日志文件最大长度（字节）
+### 日志级别
+
+- **LogLevel::TRACE**：最详细的日志级别，通常用于调试
+- **LogLevel::DEBUG**：调试信息，用于开发阶段
+- **LogLevel::INFO**：普通信息，记录程序运行状态
+- **LogLevel::WARN**：警告信息，可能的问题但不影响程序运行
+- **LogLevel::ERROR**：错误信息，程序出现错误但可以继续运行
+- **LogLevel::FATAL**：致命错误，程序无法继续运行
+
+### 输出目标
+
+- **LogTarget::CONSOLE**：仅输出到控制台
+- **LogTarget::FILE**：仅输出到文件
+- **LogTarget::BOTH**：同时输出到控制台和文件
 
 ### 日志宏
 
-| 宏名称  | 对应级别 | 功能描述               |
-|---------|----------|------------------------|
-| `debug` | DEBUG    | 输出调试信息           |
-| `info`  | INFO     | 输出普通信息           |
-| `warn`  | WARN     | 输出警告信息           |
-| `error` | ERROR    | 输出错误信息           |
-| `fatal` | FATAL    | 输出致命错误信息       |
+#### 基本宏
 
-## 注意事项
+- **TRACE(message)**：输出TRACE级别的日志
+- **DEBUG(message)**：输出DEBUG级别的日志
+- **INFO(message)**：输出INFO级别的日志
+- **WARN(message)**：输出WARN级别的日志
+- **ERROR(message)**：输出ERROR级别的日志
+- **FATAL(message)**：输出FATAL级别的日志
 
-1. **线程安全性**：当前实现非线程安全，多线程环境下使用需谨慎
-2. **异常处理**：文件操作可能抛出异常，建议捕获处理
-3. **性能考虑**：频繁的日志输出可能影响性能，建议合理设置日志级别
-4. **文件权限**：确保程序有日志文件所在目录的读写权限
-5. **C++11支持**：项目依赖C++11特性，编译时需指定`-std=c++11`或更高标准
+#### 带格式化参数的宏
+
+- **TRACE_F(format, ...)**：带格式化参数的TRACE级别日志
+- **DEBUG_F(format, ...)**：带格式化参数的DEBUG级别日志
+- **INFO_F(format, ...)**：带格式化参数的INFO级别日志
+- **WARN_F(format, ...)**：带格式化参数的WARN级别日志
+- **ERROR_F(format, ...)**：带格式化参数的ERROR级别日志
+- **FATAL_F(format, ...)**：带格式化参数的FATAL级别日志
+
+## 日志格式
+
+每条日志的格式如下：
+
+```
+[2024-01-01 12:00:00.000] [Thread 12345] [INFO] [file.cpp:42] This is a log message
+```
+
+- **时间戳**：年-月-日 时:分:秒.毫秒
+- **线程ID**：当前线程的ID
+- **日志级别**：日志的级别
+- **文件位置**：日志产生的文件和行号
+- **日志内容**：日志的具体内容
+
+## 性能特性
+
+- **线程安全**：使用互斥锁确保多线程环境下的安全
+- **高效IO**：文件写入使用缓冲，减少IO操作
+- **内存优化**：日志消息格式化使用固定大小的缓冲区，避免频繁内存分配
+
+## 测试
+
+项目包含了以下测试用例：
+
+- **LogLevels**：测试不同级别的日志输出
+- **LogRolling**：测试日志文件翻滚功能
+- **MultiThreading**：测试多线程并发写入日志
 
 ## 许可证
 
-MIT License
+本项目采用 MIT 许可证。详见 LICENSE 文件。
 
-## 作者
+## 贡献
 
-louis
+欢迎提交 Issue 和 Pull Request 来改进这个日志库。
+
+## 联系方式
+
+如有问题或建议，请联系项目维护者。
