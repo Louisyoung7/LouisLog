@@ -9,6 +9,3 @@ target_link_libraries(log_lib_test PRIVATE LouisLogLib GTest::GTest GTest::Main)
 
 # 设置测试程序的头文件包含路径
 target_include_directories(log_lib_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
-
-include(GoogleTest)
-gtest_discover_tests(log_lib_test)

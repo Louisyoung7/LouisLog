@@ -16,7 +16,7 @@
 
 ### 依赖
 
-- C++11 或更高版本
+- C++14 或更高版本
 - CMake 3.10 或更高版本
 - Google Test (仅用于测试)
 
@@ -24,18 +24,14 @@
 
 ```bash
 # 克隆仓库
-git clone <repository-url>
-cd logging
+git clone https://github.com/Louisyoung7/LouisLog.git
+cd LouisLog
 
 # 创建构建目录
 mkdir build && cd build
 
 # 配置并构建
-cmake ..
-cmake --build .
-
-# 运行测试
-ctest
+cmake .. && make
 ```
 
 ## 使用示例
