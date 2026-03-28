@@ -68,56 +68,56 @@ class LouisLog {
     void openLogFile();
 };
 
-// 日志宏定义
-#define TRACE(message) LouisLog::getInstance().log(LogLevel::TRACE, __FILE__, __LINE__, message)
-#define DEBUG(message) LouisLog::getInstance().log(LogLevel::DEBUG, __FILE__, __LINE__, message)
-#define INFO(message) LouisLog::getInstance().log(LogLevel::INFO, __FILE__, __LINE__, message)
-#define WARN(message) LouisLog::getInstance().log(LogLevel::WARN, __FILE__, __LINE__, message)
-#define ERROR(message) LouisLog::getInstance().log(LogLevel::ERROR, __FILE__, __LINE__, message)
-#define FATAL(message) LouisLog::getInstance().log(LogLevel::FATAL, __FILE__, __LINE__, message)
-
-// 支持可变参数的日志宏定义
-#define TRACE_F(format, ...)                                                      \
-    do {                                                                          \
-        char buffer[1024];                                                        \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                  \
-        LouisLog::getInstance().log(LogLevel::TRACE, __FILE__, __LINE__, buffer); \
-    } while (0)
-
-#define DEBUG_F(format, ...)                                                      \
-    do {                                                                          \
-        char buffer[1024];                                                        \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                  \
-        LouisLog::getInstance().log(LogLevel::DEBUG, __FILE__, __LINE__, buffer); \
-    } while (0)
-
-#define INFO_F(format, ...)                                                      \
-    do {                                                                         \
-        char buffer[1024];                                                       \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                 \
-        LouisLog::getInstance().log(LogLevel::INFO, __FILE__, __LINE__, buffer); \
-    } while (0)
-
-#define WARN_F(format, ...)                                                      \
-    do {                                                                         \
-        char buffer[1024];                                                       \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                 \
-        LouisLog::getInstance().log(LogLevel::WARN, __FILE__, __LINE__, buffer); \
-    } while (0)
-
-#define ERROR_F(format, ...)                                                      \
-    do {                                                                          \
-        char buffer[1024];                                                        \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                  \
-        LouisLog::getInstance().log(LogLevel::ERROR, __FILE__, __LINE__, buffer); \
-    } while (0)
-
-#define FATAL_F(format, ...)                                                      \
-    do {                                                                          \
-        char buffer[1024];                                                        \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                  \
-        LouisLog::getInstance().log(LogLevel::FATAL, __FILE__, __LINE__, buffer); \
-    } while (0)
-
 }  // namespace log
 }  // namespace louis
+
+// 日志宏定义
+#define TRACE(message) louis::log::LouisLog::getInstance().log(louis::log::LogLevel::TRACE, __FILE__, __LINE__, message)
+#define DEBUG(message) louis::log::LouisLog::getInstance().log(louis::log::LogLevel::DEBUG, __FILE__, __LINE__, message)
+#define INFO(message) louis::log::LouisLog::getInstance().log(louis::log::LogLevel::INFO, __FILE__, __LINE__, message)
+#define WARN(message) louis::log::LouisLog::getInstance().log(louis::log::LogLevel::WARN, __FILE__, __LINE__, message)
+#define ERROR(message) louis::log::LouisLog::getInstance().log(louis::log::LogLevel::ERROR, __FILE__, __LINE__, message)
+#define FATAL(message) louis::log::LouisLog::getInstance().log(louis::log::LogLevel::FATAL, __FILE__, __LINE__, message)
+
+// 支持可变参数的日志宏定义
+#define TRACE_F(format, ...)                                                                              \
+    do {                                                                                                  \
+        char buffer[1024];                                                                                \
+        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                                          \
+        louis::log::LouisLog::getInstance().log(louis::log::LogLevel::TRACE, __FILE__, __LINE__, buffer); \
+    } while (0)
+
+#define DEBUG_F(format, ...)                                                                              \
+    do {                                                                                                  \
+        char buffer[1024];                                                                                \
+        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                                          \
+        louis::log::LouisLog::getInstance().log(louis::log::LogLevel::DEBUG, __FILE__, __LINE__, buffer); \
+    } while (0)
+
+#define INFO_F(format, ...)                                                                              \
+    do {                                                                                                 \
+        char buffer[1024];                                                                               \
+        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                                         \
+        louis::log::LouisLog::getInstance().log(louis::log::LogLevel::INFO, __FILE__, __LINE__, buffer); \
+    } while (0)
+
+#define WARN_F(format, ...)                                                                              \
+    do {                                                                                                 \
+        char buffer[1024];                                                                               \
+        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                                         \
+        louis::log::LouisLog::getInstance().log(louis::log::LogLevel::WARN, __FILE__, __LINE__, buffer); \
+    } while (0)
+
+#define ERROR_F(format, ...)                                                                              \
+    do {                                                                                                  \
+        char buffer[1024];                                                                                \
+        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                                          \
+        louis::log::LouisLog::getInstance().log(louis::log::LogLevel::ERROR, __FILE__, __LINE__, buffer); \
+    } while (0)
+
+#define FATAL_F(format, ...)                                                                              \
+    do {                                                                                                  \
+        char buffer[1024];                                                                                \
+        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);                                          \
+        louis::log::LouisLog::getInstance().log(louis::log::LogLevel::FATAL, __FILE__, __LINE__, buffer); \
+    } while (0)
