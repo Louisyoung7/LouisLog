@@ -1,3 +1,13 @@
+// ============================================================
+// LouisLog 压测程序：测同步/异步日志的吞吐与延迟，供迭代前后对比
+//
+// 用法：./bench_log [--csv] [--tag <名称>]
+//   --csv        以 CSV 格式输出到终端
+//   --tag 名称   标记本次运行（如 sync / async），写入结果文件便于对比
+//
+// 结果同时追加到 bench_results.csv（含时间戳与 tag），日志写入 bench.log
+// 测试项：单线程（64B/1KB/4KB 消息、级别过滤）、4/8 线程并发写入
+// ============================================================
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -191,6 +201,9 @@ void writeResultsToFile(const std::vector<BenchResult>& results, const std::stri
         out << timeBuf << "," << tag << ",\"" << r.label << "\"," << r.elapsedSec << "," << r.count
             << "," << r.msgPerSec << "," << r.mbPerSec << "," << r.avgLatencyUs << "\n";
     }
+
+    // 每次追加结束后补一个空行，分隔不同批次的运行结果
+    out << "\n";
 }
 
 // ============================================================
