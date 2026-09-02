@@ -49,8 +49,8 @@ void LouisLog::log(LogLevel level, const std::string& file, int line, const std:
     std::string levelStr = getLevelString(level);
     std::string threadId = getThreadId();
 
-    std::string logMessage =
-        "[" + timestamp + "] [" + levelStr + "] [" + file + "] [" + std::to_string(line) + "] [" + threadId + "]" + msg;
+    std::string logMessage = "[" + timestamp + "] [" + levelStr + "] [" + file + "] [" +
+                             std::to_string(line) + "] [" + threadId + "]" + msg;
 
     // 输出到终端
     if (target_ == LogTarget::CONSOLE || target_ == LogTarget::BOTH) {
@@ -130,8 +130,8 @@ std::string LouisLog::getTimestamp() {
 
     // 将时间戳输出到字符串流
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&now_c), "%Y-%m-%d %H:%M:%S") << "." << std::setw(3) << std::setfill('0')
-       << ms.count();
+    ss << std::put_time(std::localtime(&now_c), "%Y-%m-%d %H:%M:%S") << "." << std::setw(3)
+       << std::setfill('0') << ms.count();
 
     return ss.str();
 }
@@ -195,6 +195,14 @@ void LouisLog::checkAndRollLog() {
 
         // 打开新文件
         openLogFile();
+    }
+}
+
+// 刷新缓冲区
+void LouisLog::flush() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (fileStream_.is_open()) {
+        fileStream_.flush();
     }
 }
 
