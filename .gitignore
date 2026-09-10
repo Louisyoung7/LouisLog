@@ -20,4 +20,3 @@ cmake-build-*/
 # 测试与压测产物
 *.log
 test_roll.log.*
-bench_results.csv
