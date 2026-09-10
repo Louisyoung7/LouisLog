@@ -16,3 +16,7 @@ CMakeCache.txt
 CMakeFiles/
 cmake-build-*/
 *.cmake
+
+# 测试与压测产物
+*.log
+test_roll.log.*

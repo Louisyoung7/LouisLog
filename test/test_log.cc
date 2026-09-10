@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include <vector>
 #include <thread>
+#include <vector>
 
 #include "LouisLog.h"
 
@@ -65,5 +65,3 @@ TEST_F(LogTest, MultiThreading) {
         t.join();
     }
 }
-
-

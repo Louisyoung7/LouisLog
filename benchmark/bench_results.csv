@@ -1,0 +1,28 @@
+timestamp,tag,label,elapsed_sec,count,msg_per_sec,MB_per_sec,avg_latency_us
+2026-09-03 15:26:42,sync-baseline,"1-thread small msg (64B)",2.308,1000000,433285.751,26.446,2.308
+2026-09-03 15:26:42,sync-baseline,"1-thread large msg (1KB)",0.258,100000,388071.950,378.977,2.577
+2026-09-03 15:26:42,sync-baseline,"1-thread huge msg (4KB)",0.099,30000,304396.379,1189.048,3.285
+2026-09-03 15:26:42,sync-baseline,"1-thread filtered (level gate, no I/O)",0.272,10000000,36742627.076,2242.592,0.027
+2026-09-03 15:26:42,sync-baseline,"4-thread concurrent small msg (64B)",3.000,952219,317370.103,19.371,0.000
+2026-09-03 15:26:42,sync-baseline,"8-thread concurrent small msg (64B)",3.001,916574,305454.875,18.643,0.000
+2026-09-03 15:26:42,sync-baseline,"4-thread concurrent large msg (1KB)",3.000,828265,276069.745,269.599,0.000
+2026-09-03 15:26:42,sync-baseline,"8-thread concurrent large msg (1KB)",3.001,782820,260873.202,254.759,0.000
+
+2026-09-10 19:39:32,async,"1-thread small msg (64B)",2.103,1000000,475546.841,29.025,2.103
+2026-09-10 19:39:32,async,"1-thread large msg (1KB)",0.221,100000,451602.062,441.018,2.214
+2026-09-10 19:39:32,async,"1-thread huge msg (4KB)",0.071,30000,424797.834,1659.367,2.354
+2026-09-10 19:39:32,async,"1-thread filtered (level gate, no I/O)",0.294,10000000,33997865.471,2075.065,0.029
+2026-09-10 19:39:32,async,"4-thread concurrent small msg (64B)",3.000,1543338,514395.169,31.396,0.000
+2026-09-10 19:39:32,async,"8-thread concurrent small msg (64B)",3.000,1255972,418600.206,25.549,0.000
+2026-09-10 19:39:32,async,"4-thread concurrent large msg (1KB)",3.000,1599377,533084.784,520.591,0.000
+2026-09-10 19:39:32,async,"8-thread concurrent large msg (1KB)",3.000,1279808,426548.882,416.552,0.000
+
+2026-09-10 19:45:12,localtime_r,"1-thread small msg (64B)",1.383,1000000,723322.351,44.148,1.383
+2026-09-10 19:45:12,localtime_r,"1-thread large msg (1KB)",0.141,100000,709185.103,692.564,1.410
+2026-09-10 19:45:12,localtime_r,"1-thread huge msg (4KB)",0.051,30000,584354.208,2282.634,1.711
+2026-09-10 19:45:12,localtime_r,"1-thread filtered (level gate, no I/O)",0.298,10000000,33591225.375,2050.246,0.030
+2026-09-10 19:45:12,localtime_r,"4-thread concurrent small msg (64B)",3.000,4467270,1488951.748,90.878,0.000
+2026-09-10 19:45:12,localtime_r,"8-thread concurrent small msg (64B)",3.000,5507403,1835619.339,112.037,0.000
+2026-09-10 19:45:12,localtime_r,"4-thread concurrent large msg (1KB)",3.000,5618947,1872826.485,1828.932,0.000
+2026-09-10 19:45:12,localtime_r,"8-thread concurrent large msg (1KB)",3.000,5720823,1906734.422,1862.045,0.000
+
