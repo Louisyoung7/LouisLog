@@ -1,27 +1,45 @@
 #include "LouisLog.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdarg>
-#include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <exception>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <string>
-#include <thread>
 
 namespace louis {
 namespace log {
-// 获取日志单例
+constexpr static size_t flushIntervalMs = 3000;  // 3秒刷新一次
+
 LouisLog& LouisLog::getInstance() {
     // Meyers 单例：静态局部变量的首次初始化是线程安全的
     static LouisLog instance;
     return instance;
 }
 
-// 初始化日志对象
+LouisLog::~LouisLog() {
+    stop();
+
+    // 关闭文件流
+    if (fileStream_.is_open()) fileStream_.close();
+}
+
 void LouisLog::init(LogLevel level, LogTarget target, std::string logFile, size_t maxFileSize) {
+    // 重新初始化会重启日志线程
+    if (initialized_) {
+        stopped_.store(true);
+        cv_worker_.notify_all();
+        if (workerThread_.joinable()) workerThread_.join();
+        stopped_.store(false);
+
+        // 此时 worker 已死，关掉旧文件流是安全的；
+        // 否则新 worker 看到 is_open() 为真，会继续往旧文件写
+        if (fileStream_.is_open()) fileStream_.close();
+    }
     std::lock_guard<std::mutex> lock(mutex_);
 
     level_ = level;
@@ -29,96 +47,75 @@ void LouisLog::init(LogLevel level, LogTarget target, std::string logFile, size_
     logFile_ = logFile;
     maxFileSize_ = maxFileSize;
 
-    // 如果输出目标包含文件，则打开文件
-    if (target_ == LogTarget::FILE || target_ == LogTarget::BOTH) {
-        openLogFile();
-    }
+    // 启动后台线程
+    workerThread_ = std::thread(&LouisLog::writeLoop, this);
+
+    initialized_ = true;
 }
 
 // 日志写入
 void LouisLog::log(LogLevel level, const std::string& file, int line, const std::string& msg) {
-    // 判断日志级别
-    if (level < level_) {
-        return;
-    }
+    if (level < level_.load(std::memory_order_relaxed)) return;
 
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    // 构建日志信息
+    // 获取日志信息
     std::string timestamp = getTimestamp();
-    std::string levelStr = getLevelString(level);
+    std::string levelString = getLevelString(level);
     std::string threadId = getThreadId();
 
-    std::string logMessage = "[" + timestamp + "] [" + levelStr + "] [" + file + "] [" +
+    // 前端线程、锁外格式化日志消息
+    std::string logMessage = "[" + timestamp + "] [" + levelString + "] [" + file + "] [" +
                              std::to_string(line) + "] [" + threadId + "]" + msg;
 
-    // 输出到终端
-    if (target_ == LogTarget::CONSOLE || target_ == LogTarget::BOTH) {
-        // 根据级别选择输出流
-        if (level_ >= LogLevel::ERROR) {
-            std::cerr << logMessage << std::endl;
-        } else {
-            std::cout << logMessage << std::endl;
-        }
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        pendingLogs_.emplace_back(std::move(logMessage));
     }
+    cv_worker_.notify_one();
 
-    // 输出到文件
-    if (target_ == LogTarget::FILE || target_ == LogTarget::BOTH) {
-        // 检查文件大小，需要时翻滚
-        checkAndRollLog();
-
-        if (fileStream_.is_open()) {
-            fileStream_ << logMessage << std::endl;
-            // 刷新缓冲区
-            fileStream_.flush();
-        }
-    }
+    if (level == LogLevel::FATAL) flush();
 }
 
-// 设置日志级别
-void LouisLog::setLevel(LogLevel level) {
-    std::lock_guard<std::mutex> lock(mutex_);
+void LouisLog::setLevel(LogLevel level) { level_ = level; }
 
-    level_ = level;
-}
+void LouisLog::setTarget(LogTarget target) { target_ = target; }
 
-// 设置日志输出目标
-void LouisLog::setTarget(LogTarget target) {
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    target_ = target;
-
-    // 如果日志输出目标包含文件，则打开文件
-    if (target_ == LogTarget::FILE || target_ == LogTarget::BOTH) {
-        openLogFile();
-    }
-    // 如果不包含文件，则关闭文件
-    else if (fileStream_.is_open()) {
-    }
-}
-
-// 设置日志输出文件
 void LouisLog::setLogFile(const std::string& logFile) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     logFile_ = logFile;
+}
 
-    // 如果输出目标包含文件，关闭并打开新文件
-    if ((target_ == LogTarget::FILE || target_ == LogTarget::BOTH) && fileStream_.is_open()) {
-        fileStream_.close();
-        openLogFile();
+void LouisLog::setMaxSize(size_t maxSize) { maxFileSize_.store(maxSize); }
+
+void LouisLog::flush() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    // 等待所有日志写入完成
+    cv_written_.wait(lock, [this]() { return pendingLogs_.empty() && !writing_; });
+
+    LogTarget target = target_;
+    if (target == LogTarget::CONSOLE || target == LogTarget::BOTH) {
+        std::cout.flush();
+    }
+
+    if (fileStream_.is_open()) {
+        fileStream_.flush();
     }
 }
 
-// 设置日志文件最大大小
-void LouisLog::setMaxSize(size_t maxSize) {
-    std::lock_guard<std::mutex> lock(mutex_);
+void LouisLog::stop() {
+    // 刷新日志队列
+    flush();
 
-    maxFileSize_ = maxSize;
+    // 停止后台线程
+    stopped_.store(true, std::memory_order_release);
+
+    // 通知后台线程停止
+    cv_worker_.notify_all();
+    if (workerThread_.joinable()) workerThread_.join();
 }
 
 // 获取时间戳
-std::string LouisLog::getTimestamp() {
+std::string LouisLog::getTimestamp() const {
     // 获取当前时间点
     auto now = std::chrono::system_clock::now();
 
@@ -137,7 +134,7 @@ std::string LouisLog::getTimestamp() {
 }
 
 // 获取日志级别对应的字符串
-std::string LouisLog::getLevelString(LogLevel level) {
+std::string LouisLog::getLevelString(LogLevel level) const {
     switch (level) {
         case LogLevel::TRACE:
             return "TRACE";
@@ -157,17 +154,29 @@ std::string LouisLog::getLevelString(LogLevel level) {
 }
 
 // 获取线程ID
-std::string LouisLog::getThreadId() {
+std::string LouisLog::getThreadId() const {
     std::stringstream ss;
     ss << std::this_thread::get_id();
     return ss.str();
 }
 
-// 检查文件大小，判断是否翻滚文件
-void LouisLog::checkAndRollLog() {
+void LouisLog::openLogFile(const std::string& logFile) {
+    // 关闭已打开的文件
+    if (fileStream_.is_open()) fileStream_.close();
+
+    // 重新以追加模式打开文件
+    fileStream_.open(logFile, std::ios_base::out | std::ios_base::app);
     if (!fileStream_.is_open()) {
-        return;
+        std::cerr << "Failed to open log file: " << logFile << std::endl;
+        // 如果日志目标只是文件，终止程序
+        // 否则，继续执行
+        if (target_ == LogTarget::FILE) std::terminate();
     }
+}
+
+// 检查文件大小，判断是否翻滚文件
+void LouisLog::checkAndRollLog(const std::string& logFile) {
+    if (!fileStream_.is_open()) return;
 
     // 获取文件大小
     fileStream_.seekp(0, std::ios_base::end);
@@ -184,41 +193,87 @@ void LouisLog::checkAndRollLog() {
             }
         }
 
-        // 创建文件名
-        std::string rolledFileName = logFile_ + "." + timestamp;
+        // 创建文件名；同一毫秒可能发生多次翻滚，若目标文件已存在则追加序号，
+        // 否则 std::rename 会静默覆盖同名文件，导致日志丢失
+        std::string rolledFileName = logFile + "." + timestamp;
+        for (int i = 1; std::filesystem::exists(rolledFileName); ++i) {
+            rolledFileName = logFile + "." + timestamp + "." + std::to_string(i);
+        }
 
         // 重命名当前文件
         if (fileStream_.good()) {
             fileStream_.close();
-            std::rename(logFile_.c_str(), rolledFileName.c_str());
+            std::rename(logFile.c_str(), rolledFileName.c_str());
         }
 
         // 打开新文件
-        openLogFile();
+        openLogFile(logFile);
     }
 }
 
-// 刷新缓冲区
-void LouisLog::flush() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (fileStream_.is_open()) {
-        fileStream_.flush();
+void LouisLog::writeLoop() {
+    std::vector<std::string> batch;
+    while (true) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        // 等待有日志可写
+        cv_worker_.wait_for(lock, std::chrono::milliseconds(flushIntervalMs), [this]() {
+            return !pendingLogs_.empty() || stopped_;
+        });
+
+        // 从队列中获取日志
+        batch.assign(
+            std::make_move_iterator(pendingLogs_.begin()),
+            std::make_move_iterator(pendingLogs_.end())
+        );
+        pendingLogs_.clear();
+
+        // 获取当前日志目标与日志文件名
+        LogTarget target = target_.load();
+        std::string logFile = logFile_;
+
+        writing_ = true;
+        lock.unlock();
+
+        outputBatch(batch, target, logFile);  // I/O 全在锁外，前端可以继续入队
+        batch.clear();
+
+        lock.lock();
+        writing_ = false;
+        // 通知I/O写入完成
+        cv_written_.notify_all();
+
+        if (stopped_ && pendingLogs_.empty()) break;
     }
 }
 
-// 打开日志文件
-void LouisLog::openLogFile() {
-    // 关闭已打开的文件
-    if (fileStream_.is_open()) {
-        fileStream_.close();
+void LouisLog::outputBatch(std::vector<std::string> msgs, LogTarget target, std::string logFile) {
+    // 输出到终端
+    if (target == LogTarget::CONSOLE || target == LogTarget::BOTH) {
+        for (const auto& msg : msgs) {
+            std::cout << msg << '\n';
+        }
     }
 
-    // 重新以追加模式打开文件
-    fileStream_.open(logFile_, std::ios_base::out | std::ios_base::app);
-    if (!fileStream_.is_open()) {
-        std::cerr << "Failed to open log file: " << logFile_ << std::endl;
+    // 输出到文件
+    if (target == LogTarget::FILE || target == LogTarget::BOTH) {
+        // 打开文件
+        if (!fileStream_.is_open()) openLogFile(logFile);
+
+        // 检查文件大小，需要时翻滚
+        checkAndRollLog(logFile);
+
+        if (fileStream_.is_open()) {
+            for (const auto& msg : msgs) {
+                fileStream_ << msg << '\n';
+            }
+        }
     }
+
+    std::cout.flush();
+    if (fileStream_.is_open()) fileStream_.flush();
+
+    // 如果日志目标变化了，关闭文件
+    if (target_ == LogTarget::CONSOLE) fileStream_.close();
 }
-
 }  // namespace log
 }  // namespace louis

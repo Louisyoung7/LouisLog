@@ -1,9 +1,14 @@
 #pragma once
 
+#include <atomic>
+#include <condition_variable>
 #include <cstdio>
+#include <deque>
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace louis {
 namespace log {
@@ -15,61 +20,60 @@ enum class LogTarget { CONSOLE, FILE, BOTH };
 
 class LouisLog {
    public:
-    // 获取日志单例
-    static LouisLog& getInstance();
+    static LouisLog& getInstance();  // 获取日志单例
 
-    // 初始化日志对象
     void init(
         LogLevel level = LogLevel::INFO, LogTarget target = LogTarget::CONSOLE,
         std::string logFile = "app.log", size_t maxFileSize = 1024 * 1024
-    );
+    );  // 初始化日志对象
 
-    // 日志写入
-    void log(LogLevel level, const std::string& file, int line, const std::string& msg);
+    void log(
+        LogLevel level, const std::string& file, int line, const std::string& msg
+    );  // 日志写入
 
-    // 设置日志级别
     void setLevel(LogLevel level);
-
-    // 设置日志输出目标
     void setTarget(LogTarget target);
-
-    // 设置日志输出文件
     void setLogFile(const std::string& logFile);
+    void setMaxSize(size_t maxSize);  // 设置日志文件最大大小
 
-    // 设置日志文件最大大小
-    void setMaxSize(size_t maxSize);
-
-    // 刷新缓冲区（同步日志直接刷盘；异步日志等待队列清空）
-    void flush();
+    void flush();  // 阻塞直到队列清空（测试/退出前用）
+    void stop();   // 停止异步日志处理线程
 
    private:
-    // 私有构造
     LouisLog() = default;
-
-    // 禁用拷贝与赋值
+    ~LouisLog();
     LouisLog(const LouisLog&) = delete;
     LouisLog& operator=(const LouisLog&) = delete;
 
-    // 获取时间戳
-    std::string getTimestamp();
+    std::string getTimestamp() const;
+    std::string getLevelString(LogLevel level) const;
+    std::string getThreadId() const;
 
-    // 获取日志级别对应的字符串
-    std::string getLevelString(LogLevel level);
+    void openLogFile(const std::string& logFile);  // 打开日志文件
 
-    // 获取线程ID
-    std::string getThreadId();
+    void checkAndRollLog(const std::string& logFile);  // 检查文件大小，判断是否翻滚文件
 
-    // 检查文件大小，判断是否翻滚文件
-    void checkAndRollLog();
+    void writeLoop();  // 异步日志写入循环
 
-    // 打开日志文件
-    void openLogFile();
+    void outputBatch(
+        std::vector<std::string> msgs, LogTarget target, std::string logFile
+    );  // 真正写 console/file，仅后台线程调用
 
-    LogLevel level_;            // 日志级别
-    LogTarget target_;          // 日志目标
-    std::string logFile_;       // 日志文件名
-    size_t maxFileSize_;        // 日志文件最大大小，用于实现文件翻滚
-    std::ofstream fileStream_;  // 用于将日志输出到文件的文件流对象
+    std::atomic<log::LogLevel> level_;    // 日志级别
+    std::atomic<log::LogTarget> target_;  // 日志目标
+    bool initialized_{false};             // 是否已初始化
+
+    std::string logFile_;             // 日志文件名
+    std::atomic_size_t maxFileSize_;  // 日志文件最大大小，用于实现文件翻滚
+    std::ofstream fileStream_;        // 用于将日志输出到文件的文件流对象
+
+    std::deque<std::string> pendingLogs_;  // 异步日志队列，用于存储待处理的日志消息
+    std::thread workerThread_;             // 异步日志处理线程
+    std::condition_variable cv_worker_;  // 条件变量，用于通知worker线程有新日志，或已停止
+    std::atomic_bool stopped_{false};  // 异步日志处理线程是否已停止
+    bool writing_{false};  // 异步日志处理线程是否正在写入，配合 cv_written_
+    std::condition_variable cv_written_;  // 条件变量，用于通知 flush/stop 写入完成
+
     std::mutex mutex_;
 };
 
