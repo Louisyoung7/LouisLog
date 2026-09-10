@@ -127,7 +127,8 @@ std::string LouisLog::getTimestamp() const {
 
     // 将时间戳输出到字符串流
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&now_c), "%Y-%m-%d %H:%M:%S") << "." << std::setw(3)
+    std::tm tm{};
+    ss << std::put_time(localtime_r(&now_c, &tm), "%Y-%m-%d %H:%M:%S") << "." << std::setw(3)
        << std::setfill('0') << ms.count();
 
     return ss.str();
