@@ -11,14 +11,15 @@
 - **日志文件翻滚**：基于文件大小的自动翻滚，同毫秒多次翻滚自动追加序号，避免文件被覆盖
 - **多线程安全**：支持多线程并发写入，级别/目标/文件大小等配置可随时原子热更新
 - **可靠的退出保障**：FATAL 级别自动阻塞等待落盘，`flush()`/`stop()` 确保退出前不丢日志
-- **便捷的宏定义**：提供了简单易用的日志宏，支持可变参数格式化
+- **类型安全的格式化**：基于 C++20 `std::format` 的函数式 API，格式串编译期检查，
+  无宏依赖，调用点文件/行号经 `std::source_location` 自动捕获
 - **详细的日志信息**：每条日志包含时间戳、线程ID、日志级别、文件名、行号等信息
 
 ## 安装
 
 ### 依赖
 
-- C++17 或更高版本（实现使用了 `std::filesystem`）
+- C++20 或更高版本（实现使用了 `std::format`、`std::source_location`，需 GCC 13+ / Clang 16+）
 - CMake 3.28 或更高版本
 - POSIX 线程库（CMake 自动检测并链接）
 - Google Test (仅用于测试)
@@ -33,8 +34,8 @@ cd LouisLog
 # 创建构建目录
 mkdir build && cd build
 
-# 配置并构建
-cmake .. && make
+# 配置并构建（建议 Release，见下方基准测试说明）
+cmake -DCMAKE_BUILD_TYPE=Release .. && make
 ```
 
 ## 使用示例
@@ -49,18 +50,18 @@ using namespace louis::log;
 int main() {
     // 初始化日志（默认配置：INFO级别，输出到控制台）
     LouisLog::getInstance().init();
-    
-    // 使用日志宏输出不同级别的日志
-    TRACE("这是一条TRACE级别的日志");
-    DEBUG("这是一条DEBUG级别的日志");
-    INFO("这是一条INFO级别的日志");
-    WARN("这是一条WARN级别的日志");
-    ERROR("这是一条ERROR级别的日志");
-    FATAL("这是一条FATAL级别的日志");
-    
-    // 使用带格式化参数的日志宏
-    INFO_F("Hello, %s! The answer is %d.", "world", 42);
-    
+
+    // 直接调用函数输出不同级别的日志，无需宏
+    trace("这是一条TRACE级别的日志");
+    debug("这是一条DEBUG级别的日志");
+    info("这是一条INFO级别的日志");
+    warn("这是一条WARN级别的日志");
+    error("这是一条ERROR级别的日志");
+    fatal("这是一条FATAL级别的日志");
+
+    // 使用 std::format 风格的格式化参数（格式串编译期检查）
+    info("Hello, {}! The answer is {}.", "world", 42);
+
     return 0;
 }
 ```
@@ -88,7 +89,7 @@ int main() {
     LouisLog::getInstance().setMaxSize(2 * 1024 * 1024);
     
     // 输出日志
-    INFO("配置已更新");
+    info("配置已更新");
     
     // 程序退出前确保所有日志落盘（析构时会自动调用 stop()，也可显式调用）
     LouisLog::getInstance().flush();
@@ -128,32 +129,27 @@ int main() {
 - **LogTarget::FILE**：仅输出到文件
 - **LogTarget::BOTH**：同时输出到控制台和文件
 
-### 日志宏
+### 日志函数
 
-#### 基本宏
+`using namespace louis::log;` 后直接调用，格式串为 `std::format` 风格（`{}` 占位），
+编译期检查；文件/行号经 `std::source_location` 自动捕获，无需透传：
 
-- **TRACE(message)**：输出TRACE级别的日志
-- **DEBUG(message)**：输出DEBUG级别的日志
-- **INFO(message)**：输出INFO级别的日志
-- **WARN(message)**：输出WARN级别的日志
-- **ERROR(message)**：输出ERROR级别的日志
-- **FATAL(message)**：输出FATAL级别的日志
+- **trace(format, args...)**：输出TRACE级别的日志
+- **debug(format, args...)**：输出DEBUG级别的日志
+- **info(format, args...)**：输出INFO级别的日志
+- **warn(format, args...)**：输出WARN级别的日志
+- **error(format, args...)**：输出ERROR级别的日志
+- **fatal(format, args...)**：输出FATAL级别的日志（自动阻塞至落盘）
 
-#### 带格式化参数的宏
-
-- **TRACE_F(format, ...)**：带格式化参数的TRACE级别日志
-- **DEBUG_F(format, ...)**：带格式化参数的DEBUG级别日志
-- **INFO_F(format, ...)**：带格式化参数的INFO级别日志
-- **WARN_F(format, ...)**：带格式化参数的WARN级别日志
-- **ERROR_F(format, ...)**：带格式化参数的ERROR级别日志
-- **FATAL_F(format, ...)**：带格式化参数的FATAL级别日志
+> 超大预构建消息（如 4KB 以上）想避免中间字符串的额外拷贝时，
+> 可直接调用底层 `log(level, file, line, msg)`（详见 ADR-0002）。
 
 ## 日志格式
 
 每条日志的格式如下：
 
 ```
-[2026-09-10 19:27:53.005] [INFO] [main.cc] [42] [140234512316160]This is a log message
+[2026-09-19 18:30:00.123][INFO][main.cc][42][140234512316160] This is a log message
 ```
 
 - **时间戳**：年-月-日 时:分:秒.毫秒
@@ -165,27 +161,35 @@ int main() {
 ## 性能特性
 
 - **异步写入**：`log()` 仅做格式化与入队，控制台/文件 I/O 由后台线程批量完成，且 I/O 全程在锁外执行，前端可无阻塞继续入队
-- **低开销级别过滤**：级别以原子变量存储，被过滤的日志在格式化之前即返回
+- **低开销级别过滤**：级别以原子变量存储，过滤判断先于任何格式化执行，
+  被过滤日志仅付一次原子读的代价（实测约 8 亿条/秒）
 - **原子热配置**：级别/目标/文件大小可在运行中无锁修改
 - **同步保障**：FATAL 日志自动阻塞至落盘，`stop()` 退出前排空队列
 
 ### 基准测试结果
 
-在 Linux x86-64 上的吞吐量参考（详见 `benchmark/` 目录，结果输出为 CSV）：
+在 Linux x86-64 上的吞吐量参考（**Release 构建**，详见 `benchmark/` 目录与 `bench_results.csv`；
+未配置构建类型时 std::format 在 -O0 下性能失真，严禁以 Debug 数据对比）：
 
 | 场景 | 吞吐量 |
 |---|---|
-| 单线程 64B 消息 | 约 72 万条/秒 |
-| 单线程 4KB 消息 | 约 58 万条/秒 |
-| 8 线程并发 1KB 消息 | 约 190 万条/秒 |
+| 单线程 64B 消息 | 约 134 万条/秒（0.748µs/条） |
+| 单线程 4KB 消息 | 约 46 万条/秒 |
+| 8 线程并发 1KB 消息 | 约 203 万条/秒 |
+| 单线程级别过滤（无 I/O） | 约 8 亿条/秒 |
 
 ## 测试
 
-项目包含了以下测试用例：
+项目包含 8 个测试用例（GTest），全部带输出断言：
 
-- **LogLevels**：测试不同级别的日志输出
-- **LogRolling**：测试日志文件翻滚功能
-- **MultiThreading**：测试多线程并发写入日志
+- **LogLevels**：级别过滤边界（INFO 阈值下 trace/debug 被过滤，info 及以上各恰好一条）
+- **LevelFilterRuntime**：运行时 setLevel 升/降阈值动态生效
+- **LogFormat**：行结构 `[时间戳][级别][文件][行号][线程ID] 消息`、毫秒精度、单行
+- **FatalSyncFlush**：FATAL 不显式 flush 也立即落盘
+- **LogRolling**：文件翻滚产生多个文件且总条数不丢
+- **MultiThreading**：5 线程 × 100 条并发写入，全部落盘且无交错损坏
+- **LongMessageNoTruncation**：8KB 超长消息不截断
+- **ReinitAfterStop**：stop 后重新 init，worker 线程正常重启
 
 ## 许可证
 
