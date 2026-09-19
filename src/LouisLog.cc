@@ -120,13 +120,22 @@ void LouisLog::stop() {
 
 // 获取时间戳
 std::string LouisLog::getTimestamp() const {
-    // 获取当前时间点（毫秒级精度）
-    auto now = std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now());
+    auto now = std::chrono::system_clock::now();
+    // 毫秒部分直接从 epoch 取模，避免对小数秒做格式化
+    auto ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() %
+        1000;
 
-    // 转换为本地时区的 zoned_time
-    auto now_zoned = std::chrono::zoned_time{std::chrono::current_zone(), now};
+    // localtime_r + 栈上 tm：glibc 的 localtime 是进程级串行点（见 ADR-0001）；
+    // chrono 的 current_zone()/zoned_time 每次调用都要解析 tzdb，实测拖慢 5 倍吞吐
+    std::tm tmBuf{};
+    std::time_t tt = std::chrono::system_clock::to_time_t(now);
+    localtime_r(&tt, &tmBuf);
 
-    return std::format("{:%Y-%m-%d %H:%M:%S}", now_zoned);
+    return std::format(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}", tmBuf.tm_year + 1900, tmBuf.tm_mon + 1,
+        tmBuf.tm_mday, tmBuf.tm_hour, tmBuf.tm_min, tmBuf.tm_sec, ms
+    );
 }
 
 // 获取日志级别对应的字符串
@@ -149,11 +158,14 @@ std::string LouisLog::getLevelString(LogLevel level) const {
     }
 }
 
-// 获取线程ID
+// 获取线程ID：线程 ID 不变，thread_local 只在每线程首次调用时构造一次
 std::string LouisLog::getThreadId() const {
-    std::stringstream ss;
-    ss << std::this_thread::get_id();
-    return ss.str();
+    thread_local const std::string tid = [] {
+        std::stringstream ss;
+        ss << std::this_thread::get_id();
+        return ss.str();
+    }();
+    return tid;
 }
 
 void LouisLog::openLogFile(const std::string& logFile) {
