@@ -7,7 +7,7 @@
 #include <ctime>
 #include <exception>
 #include <filesystem>
-#include <iomanip>
+#include <format>
 #include <iostream>
 #include <sstream>
 
@@ -63,8 +63,8 @@ void LouisLog::log(LogLevel level, const std::string& file, int line, const std:
     std::string threadId = getThreadId();
 
     // 前端线程、锁外格式化日志消息
-    std::string logMessage = "[" + timestamp + "] [" + levelString + "] [" + file + "] [" +
-                             std::to_string(line) + "] [" + threadId + "]" + msg;
+    std::string logMessage =
+        std::format("[{}][{}][{}][{}][{}] {}", timestamp, levelString, file, line, threadId, msg);
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -86,6 +86,8 @@ void LouisLog::setLogFile(const std::string& logFile) {
 }
 
 void LouisLog::setMaxSize(size_t maxSize) { maxFileSize_.store(maxSize); }
+
+bool LouisLog::shouldLog(LogLevel level) const { return level <= level_.load(std::memory_order_relaxed); }
 
 void LouisLog::flush() {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -116,22 +118,13 @@ void LouisLog::stop() {
 
 // 获取时间戳
 std::string LouisLog::getTimestamp() const {
-    // 获取当前时间点
-    auto now = std::chrono::system_clock::now();
+    // 获取当前时间点（毫秒级精度）
+    auto now = std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now());
 
-    // 将时间点转换为C风格的time_t类型
-    auto now_c = std::chrono::system_clock::to_time_t(now);
+    // 转换为本地时区的 zoned_time
+    auto now_zoned = std::chrono::zoned_time{std::chrono::current_zone(), now};
 
-    // 获取毫秒
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-
-    // 将时间戳输出到字符串流
-    std::stringstream ss;
-    std::tm tm{};
-    ss << std::put_time(localtime_r(&now_c, &tm), "%Y-%m-%d %H:%M:%S") << "." << std::setw(3)
-       << std::setfill('0') << ms.count();
-
-    return ss.str();
+    return std::format("{:%Y-%m-%d %H:%M:%S}", now_zoned);
 }
 
 // 获取日志级别对应的字符串
