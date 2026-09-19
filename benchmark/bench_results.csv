@@ -26,3 +26,32 @@ timestamp,tag,label,elapsed_sec,count,msg_per_sec,MB_per_sec,avg_latency_us
 2026-09-10 19:45:12,localtime_r,"4-thread concurrent large msg (1KB)",3.000,5618947,1872826.485,1828.932,0.000
 2026-09-10 19:45:12,localtime_r,"8-thread concurrent large msg (1KB)",3.000,5720823,1906734.422,1862.045,0.000
 
+timestamp,tag,label,elapsed_sec,count,msg_per_sec,MB_per_sec,avg_latency_us
+2026-09-19 17:20:32,format,"1-thread small msg (64B)",7.620,1000000,131225.352,8.009,7.620
+2026-09-19 17:20:32,format,"1-thread large msg (1KB)",0.905,100000,110468.139,107.879,9.052
+2026-09-19 17:20:32,format,"1-thread huge msg (4KB)",0.365,30000,82163.159,320.950,12.171
+2026-09-19 17:20:32,format,"1-thread filtered (level gate, no I/O)",0.094,10000000,105838124.061,6459.846,0.009
+2026-09-19 17:20:32,format,"4-thread concurrent small msg (64B)",3.000,1327568,442487.400,27.007,0.000
+2026-09-19 17:20:32,format,"8-thread concurrent small msg (64B)",3.000,2128118,709273.788,43.291,0.000
+2026-09-19 17:20:32,format,"4-thread concurrent large msg (1KB)",3.000,1112599,370838.136,362.147,0.000
+2026-09-19 17:20:32,format,"8-thread concurrent large msg (1KB)",3.001,1845235,614974.788,600.561,0.000
+
+timestamp,tag,label,elapsed_sec,count,msg_per_sec,MB_per_sec,avg_latency_us
+2026-09-19 17:59:06,'localtime_r'-baseline-rerun-release,"1-thread small msg (64B)",0.878,1000000,1138581.092,69.493,0.878
+2026-09-19 17:59:06,'localtime_r'-baseline-rerun-release,"1-thread large msg (1KB)",0.089,100000,1129171.647,1102.707,0.886
+2026-09-19 17:59:06,'localtime_r'-baseline-rerun-release,"1-thread huge msg (4KB)",0.045,30000,669629.838,2615.742,1.493
+2026-09-19 17:59:06,'localtime_r'-baseline-rerun-release,"1-thread filtered (level gate, no I/O)",0.094,10000000,106794732.632,6518.233,0.009
+2026-09-19 17:59:06,'localtime_r'-baseline-rerun-release,"4-thread concurrent small msg (64B)",3.000,7258827,2419347.627,147.665,0.000
+2026-09-19 17:59:06,'localtime_r'-baseline-rerun-release,"8-thread concurrent small msg (64B)",3.001,6434312,2144397.974,130.884,0.000
+2026-09-19 17:59:06,'localtime_r'-baseline-rerun-release,"4-thread concurrent large msg (1KB)",3.000,6990328,2329795.958,2275.191,0.000
+2026-09-19 17:59:06,'localtime_r'-baseline-rerun-release,"8-thread concurrent large msg (1KB)",3.000,6610924,2203361.650,2151.720,0.000
+
+2026-09-19 18:12:16,format+localtime_r+thread_local+release,"1-thread small msg (64B)",0.748,1000000,1337060.906,81.608,0.748
+2026-09-19 18:12:16,format+localtime_r+thread_local+release,"1-thread large msg (1KB)",0.089,100000,1118917.375,1092.693,0.894
+2026-09-19 18:12:16,format+localtime_r+thread_local+release,"1-thread huge msg (4KB)",0.065,30000,460637.207,1799.364,2.171
+2026-09-19 18:12:16,format+localtime_r+thread_local+release,"1-thread filtered (level gate, no I/O)",0.013,10000000,797637970.630,48683.958,0.001
+2026-09-19 18:12:16,format+localtime_r+thread_local+release,"4-thread concurrent small msg (64B)",3.000,6713404,2237601.290,136.572,0.000
+2026-09-19 18:12:16,format+localtime_r+thread_local+release,"8-thread concurrent small msg (64B)",3.000,5755229,1918189.813,117.077,0.000
+2026-09-19 18:12:16,format+localtime_r+thread_local+release,"4-thread concurrent large msg (1KB)",3.003,5379090,1791313.674,1749.330,0.000
+2026-09-19 18:12:16,format+localtime_r+thread_local+release,"8-thread concurrent large msg (1KB)",3.000,6084246,2027830.544,1980.303,0.000
+

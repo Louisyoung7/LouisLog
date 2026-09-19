@@ -1,13 +1,17 @@
 #pragma once
 
 #include <atomic>
+#include <concepts>
 #include <condition_variable>
 #include <cstdio>
 #include <deque>
+#include <format>
 #include <fstream>
 #include <mutex>
+#include <source_location>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 namespace louis {
@@ -35,6 +39,8 @@ class LouisLog {
     void setTarget(LogTarget target);
     void setLogFile(const std::string& logFile);
     void setMaxSize(size_t maxSize);  // 设置日志文件最大大小
+
+    bool shouldLog(LogLevel level) const;
 
     void flush();  // 阻塞直到队列清空（测试/退出前用）
     void stop();   // 停止异步日志处理线程
@@ -77,82 +83,70 @@ class LouisLog {
     std::mutex mutex_;
 };
 
+// 包装器：在调用点捕获 source_location。
+// 不能直接给变参函数加尾置默认实参（fmt, args..., loc = current()）：
+// 变参包推导时会吞掉全部剩余实参，带默认值的尾参无法参与推导，编译报
+// no matching function。cppreference 推荐用此模式绕过：
+// loc 的求值发生在包装器构造函数的默认实参中，仍处于用户调用点。
+template <typename... Args>
+struct with_source_location {
+    std::format_string<Args...> fmt;
+    std::source_location loc;
+
+    // 构造参数必须用 U&& 而非 std::format_string<Args...>：
+    // 后者会造成 字面量->format_string->包装器 连续两次用户自定义转换，
+    // 隐式转换序列非法；U&& 让字面量直接绑定参数，format_string 的构造在函数体内完成
+    template <typename U>
+        requires std::constructible_from<std::format_string<Args...>, U&&>
+    consteval with_source_location(U&& u, std::source_location l = std::source_location::current())
+        : fmt(std::forward<U>(u)), loc(l) {}
+};
+
+namespace detail {
+// 统一核心：级别过滤在格式化前，I/O 仍由 LouisLog 后台线程异步完成
+template <typename... Args>
+void emit(LogLevel level, with_source_location<std::type_identity_t<Args>...> f, Args&&... args) {
+    auto& logger = LouisLog::getInstance();
+    if (!logger.shouldLog(level)) return;  // 过滤在格式化前
+    logger.log(
+        level, f.loc.file_name(), static_cast<int>(f.loc.line()),
+        std::format(f.fmt, std::forward<Args>(args)...)
+    );  // 编译期检查格式串
+}
+}  // namespace detail
+
+// 用户面 API：无宏，编译期格式串检查，自动记录调用点的文件/行号。
+// Args 用 type_identity_t 禁止从第一参（字符串字面量）推导，只从变参包推导，
+// 否则 GCC 会拿字面量去匹配类模板特化，推导直接失败
+template <typename... Args>
+void trace(with_source_location<std::type_identity_t<Args>...> f, Args&&... args) {
+    detail::emit(LogLevel::TRACE, std::move(f), std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+void debug(with_source_location<std::type_identity_t<Args>...> f, Args&&... args) {
+    detail::emit(LogLevel::DEBUG, std::move(f), std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+void info(with_source_location<std::type_identity_t<Args>...> f, Args&&... args) {
+    detail::emit(LogLevel::INFO, std::move(f), std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+void warn(with_source_location<std::type_identity_t<Args>...> f, Args&&... args) {
+    detail::emit(LogLevel::WARN, std::move(f), std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+void error(with_source_location<std::type_identity_t<Args>...> f, Args&&... args) {
+    detail::emit(LogLevel::ERROR, std::move(f), std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+void fatal(with_source_location<std::type_identity_t<Args>...> f, Args&&... args) {
+    detail::emit(LogLevel::FATAL, std::move(f), std::forward<Args>(args)...);
+}
+
 }  // namespace log
 }  // namespace louis
-
-// 日志宏定义
-#define TRACE(message)                                           \
-    louis::log::LouisLog::getInstance().log(                     \
-        louis::log::LogLevel::TRACE, __FILE__, __LINE__, message \
-    )
-#define DEBUG(message)                                           \
-    louis::log::LouisLog::getInstance().log(                     \
-        louis::log::LogLevel::DEBUG, __FILE__, __LINE__, message \
-    )
-#define INFO(message) \
-    louis::log::LouisLog::getInstance().log(louis::log::LogLevel::INFO, __FILE__, __LINE__, message)
-#define WARN(message) \
-    louis::log::LouisLog::getInstance().log(louis::log::LogLevel::WARN, __FILE__, __LINE__, message)
-#define ERROR(message)                                           \
-    louis::log::LouisLog::getInstance().log(                     \
-        louis::log::LogLevel::ERROR, __FILE__, __LINE__, message \
-    )
-#define FATAL(message)                                           \
-    louis::log::LouisLog::getInstance().log(                     \
-        louis::log::LogLevel::FATAL, __FILE__, __LINE__, message \
-    )
-
-// 支持可变参数的日志宏定义
-#define TRACE_F(format, ...)                                        \
-    do {                                                            \
-        char buffer[1024];                                          \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);    \
-        louis::log::LouisLog::getInstance().log(                    \
-            louis::log::LogLevel::TRACE, __FILE__, __LINE__, buffer \
-        );                                                          \
-    } while (0)
-
-#define DEBUG_F(format, ...)                                        \
-    do {                                                            \
-        char buffer[1024];                                          \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);    \
-        louis::log::LouisLog::getInstance().log(                    \
-            louis::log::LogLevel::DEBUG, __FILE__, __LINE__, buffer \
-        );                                                          \
-    } while (0)
-
-#define INFO_F(format, ...)                                        \
-    do {                                                           \
-        char buffer[1024];                                         \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);   \
-        louis::log::LouisLog::getInstance().log(                   \
-            louis::log::LogLevel::INFO, __FILE__, __LINE__, buffer \
-        );                                                         \
-    } while (0)
-
-#define WARN_F(format, ...)                                        \
-    do {                                                           \
-        char buffer[1024];                                         \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);   \
-        louis::log::LouisLog::getInstance().log(                   \
-            louis::log::LogLevel::WARN, __FILE__, __LINE__, buffer \
-        );                                                         \
-    } while (0)
-
-#define ERROR_F(format, ...)                                        \
-    do {                                                            \
-        char buffer[1024];                                          \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);    \
-        louis::log::LouisLog::getInstance().log(                    \
-            louis::log::LogLevel::ERROR, __FILE__, __LINE__, buffer \
-        );                                                          \
-    } while (0)
-
-#define FATAL_F(format, ...)                                        \
-    do {                                                            \
-        char buffer[1024];                                          \
-        snprintf(buffer, sizeof(buffer), format, ##__VA_ARGS__);    \
-        louis::log::LouisLog::getInstance().log(                    \
-            louis::log::LogLevel::FATAL, __FILE__, __LINE__, buffer \
-        );                                                          \
-    } while (0)

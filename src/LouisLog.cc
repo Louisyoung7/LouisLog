@@ -7,7 +7,7 @@
 #include <ctime>
 #include <exception>
 #include <filesystem>
-#include <iomanip>
+#include <format>
 #include <iostream>
 #include <sstream>
 
@@ -63,8 +63,8 @@ void LouisLog::log(LogLevel level, const std::string& file, int line, const std:
     std::string threadId = getThreadId();
 
     // 前端线程、锁外格式化日志消息
-    std::string logMessage = "[" + timestamp + "] [" + levelString + "] [" + file + "] [" +
-                             std::to_string(line) + "] [" + threadId + "]" + msg;
+    std::string logMessage =
+        std::format("[{}][{}][{}][{}][{}] {}", timestamp, levelString, file, line, threadId, msg);
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -86,6 +86,10 @@ void LouisLog::setLogFile(const std::string& logFile) {
 }
 
 void LouisLog::setMaxSize(size_t maxSize) { maxFileSize_.store(maxSize); }
+
+bool LouisLog::shouldLog(LogLevel level) const {
+    return level >= level_.load(std::memory_order_relaxed);
+}
 
 void LouisLog::flush() {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -116,22 +120,22 @@ void LouisLog::stop() {
 
 // 获取时间戳
 std::string LouisLog::getTimestamp() const {
-    // 获取当前时间点
     auto now = std::chrono::system_clock::now();
+    // 毫秒部分直接从 epoch 取模，避免对小数秒做格式化
+    auto ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() %
+        1000;
 
-    // 将时间点转换为C风格的time_t类型
-    auto now_c = std::chrono::system_clock::to_time_t(now);
+    // localtime_r + 栈上 tm：glibc 的 localtime 是进程级串行点（见 ADR-0001）；
+    // chrono 的 current_zone()/zoned_time 每次调用都要解析 tzdb，实测拖慢 5 倍吞吐
+    std::tm tmBuf{};
+    std::time_t tt = std::chrono::system_clock::to_time_t(now);
+    localtime_r(&tt, &tmBuf);
 
-    // 获取毫秒
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-
-    // 将时间戳输出到字符串流
-    std::stringstream ss;
-    std::tm tm{};
-    ss << std::put_time(localtime_r(&now_c, &tm), "%Y-%m-%d %H:%M:%S") << "." << std::setw(3)
-       << std::setfill('0') << ms.count();
-
-    return ss.str();
+    return std::format(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}", tmBuf.tm_year + 1900, tmBuf.tm_mon + 1,
+        tmBuf.tm_mday, tmBuf.tm_hour, tmBuf.tm_min, tmBuf.tm_sec, ms
+    );
 }
 
 // 获取日志级别对应的字符串
@@ -154,11 +158,14 @@ std::string LouisLog::getLevelString(LogLevel level) const {
     }
 }
 
-// 获取线程ID
+// 获取线程ID：线程 ID 不变，thread_local 只在每线程首次调用时构造一次
 std::string LouisLog::getThreadId() const {
-    std::stringstream ss;
-    ss << std::this_thread::get_id();
-    return ss.str();
+    thread_local const std::string tid = [] {
+        std::stringstream ss;
+        ss << std::this_thread::get_id();
+        return ss.str();
+    }();
+    return tid;
 }
 
 void LouisLog::openLogFile(const std::string& logFile) {

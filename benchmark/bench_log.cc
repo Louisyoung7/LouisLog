@@ -82,14 +82,12 @@ struct BenchResult {
 // ============================================================
 // 单线程：固定消息数，测调用方耗时
 // ============================================================
-BenchResult benchSingle(
-    const std::string& label, int count, const std::string& msg, LogLevel level = LogLevel::INFO
-) {
+BenchResult benchSingle(const std::string& label, int count, const std::string& msg) {
     LouisLog& logger = LouisLog::getInstance();
 
     auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < count; ++i) {
-        logger.log(level, __FILE__, __LINE__, msg);
+        info("{}", msg);  // 走新 API：source_location 自动捕获 + std::format 编译期检查
     }
     auto end = std::chrono::steady_clock::now();
 
@@ -109,8 +107,7 @@ BenchResult benchSingle(
 // 多线程：固定时间，测总吞吐
 // ============================================================
 BenchResult benchMulti(
-    const std::string& label, int threadCount, int durationSec, const std::string& msg,
-    LogLevel level = LogLevel::INFO
+    const std::string& label, int threadCount, int durationSec, const std::string& msg
 ) {
     LouisLog& logger = LouisLog::getInstance();
     std::atomic<bool> stopFlag{false};
@@ -122,7 +119,7 @@ BenchResult benchMulti(
     for (int t = 0; t < threadCount; ++t) {
         workers.emplace_back([&]() {
             while (!stopFlag.load(std::memory_order_relaxed)) {
-                logger.log(level, __FILE__, __LINE__, msg);
+                info("{}", msg);
                 totalCount.fetch_add(1, std::memory_order_relaxed);
             }
         });
@@ -149,8 +146,9 @@ BenchResult benchMulti(
 
 // ============================================================
 // 单线程：级别过滤路径
-// 级别设为 WARN 后发 INFO 日志，全部被级别检查拦下，
-// 不做格式化/加锁/I/O，测最快路径的纯内存开销
+// 级别设为 WARN 后发 INFO 日志，emit 在格式化之前即被级别检查拦下
+// （仅 source_location 捕获 + 原子读），不做格式化/加锁/I/O，
+// 测最快路径的纯内存开销
 // ============================================================
 BenchResult benchFiltered(const std::string& label, int count, const std::string& msg) {
     LouisLog& logger = LouisLog::getInstance();
@@ -158,7 +156,7 @@ BenchResult benchFiltered(const std::string& label, int count, const std::string
 
     auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < count; ++i) {
-        logger.log(LogLevel::INFO, __FILE__, __LINE__, msg);
+        info("{}", msg);
     }
     auto end = std::chrono::steady_clock::now();
 
@@ -233,13 +231,12 @@ int main(int argc, char* argv[]) {
 
     std::string smallMsg = makeMessage(kSmallMsgSize);
     std::string largeMsg = makeMessage(kLargeMsgSize);
-    // 超大消息直接调 log() 而不用宏：_F 系列宏的 snprintf 缓冲区只有 1024，会截断 4KB 消息
-    std::string hugeMsg = makeMessage(kHugeMsgSize);
+    std::string hugeMsg = makeMessage(kHugeMsgSize);  // 新 API 无固定缓冲，4KB 不会截断
 
     // --- 预热：清掉初始化的抖动 ---
     std::string warmupMsg = makeMessage(32);
     for (int i = 0; i < 200'000; ++i) {
-        logger.log(LogLevel::INFO, __FILE__, __LINE__, warmupMsg);
+        info("{}", warmupMsg);
     }
     logger.flush();
 
