@@ -87,7 +87,9 @@ void LouisLog::setLogFile(const std::string& logFile) {
 
 void LouisLog::setMaxSize(size_t maxSize) { maxFileSize_.store(maxSize); }
 
-bool LouisLog::shouldLog(LogLevel level) const { return level <= level_.load(std::memory_order_relaxed); }
+bool LouisLog::shouldLog(LogLevel level) const {
+    return level >= level_.load(std::memory_order_relaxed);
+}
 
 void LouisLog::flush() {
     std::unique_lock<std::mutex> lock(mutex_);
